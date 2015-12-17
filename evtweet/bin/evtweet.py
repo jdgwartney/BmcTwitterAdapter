@@ -4,6 +4,7 @@ import ConfigObject
 cobj = ConfigObject.ConfigObject()
 
 print cobj.confdir
+print cobj.filterString
 
 ### code to save tweets in json###
 import sys
@@ -17,12 +18,17 @@ file = open('today.txt', 'a')
 
 class CustomStreamListener(tweepy.StreamListener):
     def on_status(self, status):
+        print status.user.screen_name
         print status.text
 
     def on_data(self, data):
-        print json.dumps(data)
-        json_data = json.loads(data)
-        # file.write(str(json_data))
+        tweet = json.loads(data)
+
+        if tweet.has_key('user'):
+             user = tweet['user']['name']
+             text = tweet['text']
+             print user
+             print text
 
     def on_error(self, status_code):
         print >> sys.stderr, 'Encountered error with status code:', status_code
@@ -33,5 +39,7 @@ class CustomStreamListener(tweepy.StreamListener):
         return True # Don't kill the stream
 
 sapi = tweepy.streaming.Stream(auth, CustomStreamListener())
-sapi.filter(track=['Trump'])
+filterArray = cobj.filterString.split(",")
+print filterArray
+sapi.filter(track=filterArray)
 
