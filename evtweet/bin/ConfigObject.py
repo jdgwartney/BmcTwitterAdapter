@@ -13,6 +13,7 @@ class ConfigObject:
    access_token_key = ""
    access_token_secret = ""
    filterString = ""
+   pulseUserPwd = ""
 
    def __init__(self):
       Config = ConfigParser.ConfigParser()
@@ -26,4 +27,5 @@ class ConfigObject:
       self.access_token_key = Config.get("TwitterAuthentication", "access_token_key" )
       self.access_token_secret = Config.get("TwitterAuthentication", "access_token_secret" )
       self.filterString = Config.get("FilterConfig", "filterString" )
+      self.pulseUserPwd = Config.get("PulseConfig", "UserPwd" )
 
