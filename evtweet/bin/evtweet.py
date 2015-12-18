@@ -41,7 +41,7 @@ def raiseEvent(eventText, userName, userPwd):
 # Call back for RaiseEvent
 #---------------------------------------------------
 def cb(r):
-   print "callback for raiseEvent"
+   print("callback for raiseEvent")
 
 #---------------------------------------------------
 # Create processing pool for raiseEvent
@@ -55,8 +55,8 @@ if __name__ == '__main__':
 class CustomStreamListener(tweepy.StreamListener):
 
     def on_status(self, status):
-        print status.user.screen_name
-        print status.text
+        print(status.user.screen_name)
+        print(status.text)
 
     def on_data(self, data):
         tweet = json.loads(data)
