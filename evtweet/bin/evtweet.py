@@ -5,8 +5,10 @@ import tweepy
 import json
 import pycurl
 from multiprocessing import Pool
+import threading
 
 cobj = ConfigObject.ConfigObject()
+global tweetCounter
 tweetCounter = 0
 
 #--------------------------------------------------
@@ -41,36 +43,34 @@ def raiseEvent(eventText, userName, userPwd):
 #---------------------------------------------------
 # Aggregate and send total
 #---------------------------------------------------
-def AggAndSend(sapi):
-   print "starting AggAndSend"
-   print "starting AggAndSend"
-   while True:
-       print "starting AggAndSend"
-       time.sleep(1)
-       print "starting AggAndSend"
-       timestamp = time.mktime(time.localtime())
-       headers = ['Expect:', 'Content-Type: application/json']
-       url =  "https://premium-api.boundary.com/v1/measurements"
-    
-       newMeasure =   {
+def AggAndSend():
+    global tweetCounter
+    while True:
+        time.sleep(60)
+        print "AggAndSend"
+        timestamp = time.mktime(time.localtime())
+        headers = ['Expect:', 'Content-Type: application/json']
+        url =  "https://premium-api.boundary.com/v1/measurements"
+       
+        newMeasure =   {
         "source": "myserver",
-         "metric": "TweetCount",
-         "measure": sapi.ec,
-       "timestamp": timestamp
-       }
+        "metric": "TweetCount",
+        "measure": tweetCounter,
+        "timestamp": timestamp
+        }
 
-       print "starting pycurl"
-       c= pycurl.Curl()
-       c.setopt(pycurl.URL, url)
-       c.setopt(pycurl.HTTPHEADER,headers )
-       c.setopt(pycurl.CUSTOMREQUEST, "POST")
-       c.setopt(pycurl.USERPWD, cobj.pulseUserPwd)
-       data = json.dumps(newMeasure)
-       c.setopt(pycurl.POSTFIELDS,data)
-       c.perform()
-       print ("metric post status code" +  str(c.getinfo(pycurl.HTTP_CODE)))
-       c.close()
-       sapi.ec = 0
+        print "starting pycurl"
+        c= pycurl.Curl()
+        c.setopt(pycurl.URL, url)
+        c.setopt(pycurl.HTTPHEADER,headers )
+        c.setopt(pycurl.CUSTOMREQUEST, "POST")
+        c.setopt(pycurl.USERPWD, cobj.pulseUserPwd)
+        data = json.dumps(newMeasure)
+        c.setopt(pycurl.POSTFIELDS,data)
+        c.perform()
+        print ("metric post status code" +  str(c.getinfo(pycurl.HTTP_CODE)))
+        c.close()
+        tweetCounter = 0
 
 #------------------------------------------------------
 #  Create the metric def in pulsed
@@ -87,7 +87,6 @@ def CreateMetric():
    "unit": "number",
    "defaultAggregate": "sum"
    }
-
 
    c= pycurl.Curl()
    c.setopt(pycurl.URL, url)
@@ -107,12 +106,6 @@ def cb(r):
    print("callback for raiseEvent")
 
 #---------------------------------------------------
-# Call back for RaiseEvent
-#---------------------------------------------------
-def cb2(r):
-   print("callback for measure")
-
-#---------------------------------------------------
 # Create processing pool for raiseEvent
 #---------------------------------------------------
 if __name__ == '__main__':
@@ -122,7 +115,6 @@ if __name__ == '__main__':
 # Listener for tweepy stream
 #---------------------------------------------------
 class CustomStreamListener(tweepy.StreamListener):
-    ec = 0
     def on_status(self, status):
         print(status.user.screen_name)
         print(status.text)
@@ -133,10 +125,9 @@ class CustomStreamListener(tweepy.StreamListener):
         if tweet.has_key('user'):
              user = tweet['user']['name']
              text = tweet['text']
-             # callPulse(text, user, cobj.pulseUserPwd)
-             # tweetCounter = tweetCounter + 1 
              pool.apply_async(raiseEvent,(text,user,cobj.pulseUserPwd,), callback=cb)
-             self.ec = self.ec + 1
+             global tweetCounter
+             tweetCounter = tweetCounter + 1
 
     def on_error(self, status_code):
         print >> sys.stderr, 'Encountered error with status code:', status_code
@@ -151,14 +142,18 @@ class CustomStreamListener(tweepy.StreamListener):
 #-------------------------------------------------------
 CreateMetric()
 
-ec = 0
-pool.apply_async(AggAndSend,(ec,), callback=cb2)
+#-------------------------------------------------------
+#  Start the looping thread to post tweet counts
+#-------------------------------------------------------
+t = threading.Timer(1.0, AggAndSend)
+t.start()
 
+#-------------------------------------------------------
+# Create and start the twitter stream
+#-------------------------------------------------------
 auth = tweepy.OAuthHandler(cobj.consumer_key, cobj.consumer_secret)
 auth.set_access_token(cobj.access_token_key, cobj.access_token_secret)
-# api = tweepy.API(auth)
 sapi = tweepy.streaming.Stream(auth, CustomStreamListener())
-sapi.ec = ec
 filterArray = cobj.filterString.split(",")
 sapi.filter(track=filterArray)
 
