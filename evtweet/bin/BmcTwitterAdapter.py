@@ -94,7 +94,7 @@ class CustomStreamListener(tweepy.StreamListener):
     #---------------------------------------------------
     def AggAndSend(self):
         while self.continueThread > 0:
-            time.sleep(10)
+            time.sleep(self.cobj.metricInterval)
             print "contiueThread = " + str(self.continueThread)
             print "AggAndSend"
             timestamp = time.mktime(time.localtime())
@@ -155,23 +155,26 @@ class CustomStreamListener(tweepy.StreamListener):
     def __init__(self):
         self.pool = ThreadPool(20)
         self.CreateMetric()
-        self.pool.add_task(self.AggAndSend)
+
+        print "metricInterval = " + str(self.cobj.metricInterval)
+        
+        if self.cobj.reportMetrics == True:
+            self.pool.add_task(self.AggAndSend)
 
     def on_status(self, status):
         print(status.user.screen_name)
         print(status.text)
 
     def on_data(self, data):
-        print "got a tweet"
         tweet = json.loads(data)
-
         if tweet.has_key('user'):
              user = tweet['user']['name']
              text = tweet['text']
              self.tweetCounter = self.tweetCounter + 1
              # pool.apply_async(self.raiseEvent,args=(text,user,self.cobj.pulseUserPwd,), callback=cb)
              # self.raiseEvent(text,user,self.cobj.pulseUserPwd)
-             self.pool.add_task(self.raiseEvent,text,user,self.cobj.pulseUserPwd)
+             if self.cobj.raiseEvents == True:
+                 self.pool.add_task(self.raiseEvent,text,user,self.cobj.pulseUserPwd)
              print "started raiseEvent"
 
     def on_error(self, status_code):
