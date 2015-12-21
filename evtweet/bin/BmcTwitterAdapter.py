@@ -53,18 +53,19 @@ class CustomStreamListener(tweepy.StreamListener):
     cobj = ConfigObject.ConfigObject()
     continueThread = 1
     tweetCounter = 0
+    tweetCounterArray = {}
+
+    topicArray =  cobj.filterString.split(",")
+    for topic in topicArray:
+        tweetCounterArray[topic] = 0 
+
     t = 0
 
     #--------------------------------------------------
     # Raise event function to post events to Pulse
     #--------------------------------------------------
-    def raiseEvent(self, eventText, userName, userPwd):
+    def raiseEvent(self, eventText, userName, userPwd, topic):
 
-        fobj = open("tweets.txt", 'a')
-        fobj.write(eventText)
-        fobj.close()
-
-        print "starting raiseEvent"
         headers = ['Expect:', 'Content-Type: application/json']
         url =  "https://premium-api.boundary.com/v1/events"
         newEvent = {
@@ -72,7 +73,7 @@ class CustomStreamListener(tweepy.StreamListener):
                "@title"
             ],
             "source": {
-            "ref": "myserver",
+            "ref": topic,
             "type": "host",
             },
             "title": userName + ":" + eventText
@@ -86,40 +87,53 @@ class CustomStreamListener(tweepy.StreamListener):
         data = json.dumps(newEvent)
         c.setopt(pycurl.POSTFIELDS,data)
         c.perform()
-        print ("status code:=" +  str(c.getinfo(pycurl.HTTP_CODE)))
         c.close()
 
+    #---------------------------------------------------
+    # Set Tweet Counters
+    #---------------------------------------------------
+    def SetTweetCounters(self,tweetText):
+       lowerTweetText = tweetText.lower()
+
+       topicArray =  self.cobj.filterString.split(",")
+       for topic in topicArray:
+           if topic.lower() in lowerTweetText:
+               self.tweetCounterArray[topic] = self.tweetCounterArray[topic] + 1
+               return topic
+       return "NOT" 
+    
     #---------------------------------------------------
     # Aggregate and send total
     #---------------------------------------------------
     def AggAndSend(self):
         while self.continueThread > 0:
             time.sleep(self.cobj.metricInterval)
-            print "contiueThread = " + str(self.continueThread)
-            print "AggAndSend"
             timestamp = time.mktime(time.localtime())
             headers = ['Expect:', 'Content-Type: application/json']
             url =  "https://premium-api.boundary.com/v1/measurements"
        
-            newMeasure =   {
-             "source": "myserver",
-             "metric": "TweetCount",
-             "measure": self.tweetCounter,
-             "timestamp": timestamp
-            }
+            topicArray =  self.cobj.filterString.split(",")
+            for topic in topicArray:
+                tweetCount = self.tweetCounterArray[topic]
+           
+                newMeasure =   {
+                 "source": topic,
+                 "metric": "TweetCount",
+                 "measure":  tweetCount,
+                 "timestamp": timestamp
+                }
 
-            print "starting pycurl"
-            c= pycurl.Curl()
-            c.setopt(pycurl.URL, url)
-            c.setopt(pycurl.HTTPHEADER,headers )
-            c.setopt(pycurl.CUSTOMREQUEST, "POST")
-            c.setopt(pycurl.USERPWD, self.cobj.pulseUserPwd)
-            data = json.dumps(newMeasure)
-            c.setopt(pycurl.POSTFIELDS,data)
-            c.perform()
-            print ("metric post status code" +  str(c.getinfo(pycurl.HTTP_CODE)))
-            c.close()
-            self.tweetCounter = 0
+                c= pycurl.Curl()
+                c.setopt(pycurl.URL, url)
+                c.setopt(pycurl.HTTPHEADER,headers )
+                c.setopt(pycurl.CUSTOMREQUEST, "POST")
+                c.setopt(pycurl.USERPWD, self.cobj.pulseUserPwd)
+                data = json.dumps(newMeasure)
+                c.setopt(pycurl.POSTFIELDS,data)
+                c.perform()
+                c.close()
+                self.tweetCounter = 0
+                self.tweetCounterArray[topic] = 0
 
     #------------------------------------------------------
     #  Create the metric def in pulsed
@@ -145,7 +159,6 @@ class CustomStreamListener(tweepy.StreamListener):
         data = json.dumps(newMetric)
         c.setopt(pycurl.POSTFIELDS,data)
         c.perform()
-        print ("Metric create status code:=" +  str(c.getinfo(pycurl.HTTP_CODE)))
         c.close()
 
     #---------------------------------------------------
@@ -156,14 +169,11 @@ class CustomStreamListener(tweepy.StreamListener):
         self.pool = ThreadPool(20)
         self.CreateMetric()
 
-        print "metricInterval = " + str(self.cobj.metricInterval)
         
         if self.cobj.reportMetrics == True:
             self.pool.add_task(self.AggAndSend)
 
-    def on_status(self, status):
-        print(status.user.screen_name)
-        print(status.text)
+    #def on_status(self, status):
 
     def on_data(self, data):
         tweet = json.loads(data)
@@ -171,11 +181,12 @@ class CustomStreamListener(tweepy.StreamListener):
              user = tweet['user']['name']
              text = tweet['text']
              self.tweetCounter = self.tweetCounter + 1
-             # pool.apply_async(self.raiseEvent,args=(text,user,self.cobj.pulseUserPwd,), callback=cb)
-             # self.raiseEvent(text,user,self.cobj.pulseUserPwd)
-             if self.cobj.raiseEvents == True:
-                 self.pool.add_task(self.raiseEvent,text,user,self.cobj.pulseUserPwd)
-             print "started raiseEvent"
+             topic = self.SetTweetCounters(text)
+             if topic != "NOT":
+                 # pool.apply_async(self.raiseEvent,args=(text,user,self.cobj.pulseUserPwd,), callback=cb)
+                 # self.raiseEvent(text,user,self.cobj.pulseUserPwd)
+                 if self.cobj.raiseEvents == True:
+                     self.pool.add_task(self.raiseEvent,text,user,self.cobj.pulseUserPwd,topic)
 
     def on_error(self, status_code):
         print >> sys.stderr, 'Encountered error with status code:', status_code
