@@ -101,7 +101,36 @@ class CustomStreamListener(tweepy.StreamListener):
                self.tweetCounterArray[topic] = self.tweetCounterArray[topic] + 1
                return topic
        return "NOT" 
-    
+
+
+    #---------------------------------------------------
+    #
+    #---------------------------------------------------
+    def PostMetrics(self, timestamp, newTweetCounterArray):
+        headers = ['Expect:', 'Content-Type: application/json']
+        url =  "https://premium-api.boundary.com/v1/measurements"
+
+        topicArray =  self.cobj.filterString.split(",")
+        for topic in topicArray:
+            tweetCount = newTweetCounterArray[topic]
+
+            newMeasure =   {
+            "source": topic,
+            "metric": "TweetCount",
+            "measure":  tweetCount,
+            "timestamp": timestamp
+            }
+
+            c= pycurl.Curl()
+            c.setopt(pycurl.URL, url)
+            c.setopt(pycurl.HTTPHEADER,headers )
+            c.setopt(pycurl.CUSTOMREQUEST, "POST")
+            c.setopt(pycurl.USERPWD, self.cobj.pulseUserPwd)
+            data = json.dumps(newMeasure)
+            c.setopt(pycurl.POSTFIELDS,data)
+            c.perform()
+            c.close()
+
     #---------------------------------------------------
     # Aggregate and send total
     #---------------------------------------------------
@@ -109,31 +138,17 @@ class CustomStreamListener(tweepy.StreamListener):
         while self.continueThread > 0:
             time.sleep(self.cobj.metricInterval)
             timestamp = time.mktime(time.localtime())
-            headers = ['Expect:', 'Content-Type: application/json']
-            url =  "https://premium-api.boundary.com/v1/measurements"
-       
+            
+            newTweetCounterArray = {}
             topicArray =  self.cobj.filterString.split(",")
-            for topic in topicArray:
-                tweetCount = self.tweetCounterArray[topic]
-           
-                newMeasure =   {
-                 "source": topic,
-                 "metric": "TweetCount",
-                 "measure":  tweetCount,
-                 "timestamp": timestamp
-                }
 
-                c= pycurl.Curl()
-                c.setopt(pycurl.URL, url)
-                c.setopt(pycurl.HTTPHEADER,headers )
-                c.setopt(pycurl.CUSTOMREQUEST, "POST")
-                c.setopt(pycurl.USERPWD, self.cobj.pulseUserPwd)
-                data = json.dumps(newMeasure)
-                c.setopt(pycurl.POSTFIELDS,data)
-                c.perform()
-                c.close()
-                self.tweetCounter = 0
-                self.tweetCounterArray[topic] = 0
+            # Add a lock here
+            for topic in topicArray:
+                newTweetCounterArray[topic] = self.tweetCounterArray[topic]
+                self.tweetCounterArray[topic] = 0   # potential thread safety issue
+               
+            self.pool.add_task(self.PostMetrics,timestamp, newTweetCounterArray)
+            # Release the lock here
 
     #------------------------------------------------------
     #  Create the metric def in pulsed
@@ -181,12 +196,17 @@ class CustomStreamListener(tweepy.StreamListener):
              user = tweet['user']['name']
              text = tweet['text']
              self.tweetCounter = self.tweetCounter + 1
+
+             # add a lock here
+
              topic = self.SetTweetCounters(text)
              if topic != "NOT":
                  # pool.apply_async(self.raiseEvent,args=(text,user,self.cobj.pulseUserPwd,), callback=cb)
                  # self.raiseEvent(text,user,self.cobj.pulseUserPwd)
                  if self.cobj.raiseEvents == True:
                      self.pool.add_task(self.raiseEvent,text,user,self.cobj.pulseUserPwd,topic)
+
+             # release the lock here
 
     def on_error(self, status_code):
         print >> sys.stderr, 'Encountered error with status code:', status_code
