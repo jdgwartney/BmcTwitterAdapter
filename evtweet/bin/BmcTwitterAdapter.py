@@ -8,6 +8,7 @@ from multiprocessing import Pool
 from threading import Thread
 from Queue import Queue
 import threading
+import re
 
 #---------------------------------------------------
 # Thread class for processing
@@ -51,6 +52,7 @@ class ThreadPool:
 class CustomStreamListener(tweepy.StreamListener):
     
     cobj = ConfigObject.ConfigObject()
+    cobj.printConfig()
     continueThread = 1
     tweetCounter = 0
     tweetCounterArray = {}
@@ -93,14 +95,43 @@ class CustomStreamListener(tweepy.StreamListener):
     # Set Tweet Counters
     #---------------------------------------------------
     def SetTweetCounters(self,tweetText):
+       foundKeywords = False
+       foundTopic = False
+
        lowerTweetText = tweetText.lower()
 
+       returnString = "NOT"
        topicArray =  self.cobj.filterString.split(",")
        for topic in topicArray:
            if topic.lower() in lowerTweetText:
-               self.tweetCounterArray[topic] = self.tweetCounterArray[topic] + 1
-               return topic
-       return "NOT" 
+               foundTopic = True
+               returnString = topic 
+               break
+
+       if foundTopic == True:
+           regularExpression=self.cobj.regularExpression[returnString]
+           if regularExpression != "NOT":
+               searchResults = re.search(regularExpression, lowerTweetText)
+               if searchResults:
+                    foundKeywords = True
+               else:
+                    foundKeywords = False
+           else:
+               foundKeywords = True         
+
+       print "------------------ new tweet ----------------------"
+       print "topic = " + topic
+       print "foundTopic = " + str(foundTopic)
+       print "foundKeywords = " + str(foundKeywords)
+       print " " 
+       print "tweetText = " + tweetText
+
+       if foundTopic == True and foundKeywords == True:
+           self.tweetCounterArray[returnString] = self.tweetCounterArray[returnString] + 1
+       else:
+           returnString = "Not"
+       
+       return returnString 
 
 
     #---------------------------------------------------
