@@ -9,6 +9,8 @@ from threading import Thread
 from Queue import Queue
 import threading
 import re
+import logging
+import logging.handlers
 
 #---------------------------------------------------
 # Thread class for processing
@@ -52,7 +54,6 @@ class ThreadPool:
 class CustomStreamListener(tweepy.StreamListener):
     
     cobj = ConfigObject.ConfigObject()
-    cobj.printConfig()
     continueThread = 1
     tweetCounter = 0
     tweetCounterArray = {}
@@ -119,12 +120,11 @@ class CustomStreamListener(tweepy.StreamListener):
            else:
                foundKeywords = True         
 
-       print "------------------ new tweet ----------------------"
-       print "topic = " + topic
-       print "foundTopic = " + str(foundTopic)
-       print "foundKeywords = " + str(foundKeywords)
-       print " " 
-       print "tweetText = " + tweetText
+       self.mlog.debug("Received new tweet")
+       self.mlog.debug("topic = " + topic)
+       self.mlog.debug("foundTopic = " + str(foundTopic))
+       self.mlog.debug("foundKeywords = " + str(foundKeywords))
+       self.mlog.debug("tweetText = " + tweetText)
 
        if foundTopic == True and foundKeywords == True:
            self.tweetCounterArray[returnString] = self.tweetCounterArray[returnString] + 1
@@ -212,15 +212,47 @@ class CustomStreamListener(tweepy.StreamListener):
     #---------------------------------------------------
 
     def __init__(self):
-        self.pool = ThreadPool(20)
-        self.CreateMetric()
+        LOG_FILENAME = self.cobj.logdir + "/BmcTwitterAdapter.log"
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
+        self.mlog = logging.getLogger('MyLogger')
+        self.mlog.setLevel(logging.DEBUG)
+        self.handler = logging.handlers.RotatingFileHandler(
+              LOG_FILENAME, maxBytes=100000, backupCount=5)
+        self.handler.setFormatter(formatter)
+        self.mlog.addHandler(self.handler)
+        self.mlog.info("BMC Twitter Adapter starting up")
+        self.cobj.printConfig(self.mlog)
+
+        self.pool = ThreadPool(20)
         
+        #-------------------------------------------------------------------
+        # Make a call to Pulse to ensure the metric definition is in place.
+        # This is done on initialization only.
+        #-------------------------------------------------------------------
+        self.CreateMetric()
+       
+        #------------------------------------------------------------------------
+        # Start the thread process to calculae and send metrics.  This is 
+        # done with a timer.  The metrics are totalled in the instance variable 
+        # tweetCounter array.  The AggAndSend metric simply reads this array
+        # on an interval and sends the metrics to BMC TrueSight Pulse
+        #------------------------------------------------------------------------
         if self.cobj.reportMetrics == True:
             self.pool.add_task(self.AggAndSend)
 
+    #--------------------------------------------------------------------------
+    # Our main processing object is a sublass of Tweepy's stream listener
+    # we do not have a need for the on_status method so it is commented out
+    #--------------------------------------------------------------------------
+
     #def on_status(self, status):
 
+    #--------------------------------------------------------------------------
+    # Our main processing object is a sublass of Tweepy's stream listener
+    # The on_data method is invokded when a tweet satisfying the given filter
+    # is received.
+    #--------------------------------------------------------------------------
     def on_data(self, data):
         tweet = json.loads(data)
         if tweet.has_key('user'):
@@ -230,27 +262,36 @@ class CustomStreamListener(tweepy.StreamListener):
 
              # add a lock here
 
+             #------------------------------------------------------------------
+             # Our set tweet counters method does two things.  1) it applies 
+             # a regular expression to the tweet text to see if this tweet
+             # counts. 2) it increments the required counter and 3) it tells
+             # us whether or not we need to post the tweet intself as an
+             # event.
+             #------------------------------------------------------------------
+
              topic = self.SetTweetCounters(text)
              if topic != "NOT":
-                 # pool.apply_async(self.raiseEvent,args=(text,user,self.cobj.pulseUserPwd,), callback=cb)
-                 # self.raiseEvent(text,user,self.cobj.pulseUserPwd)
                  if self.cobj.raiseEvents == True:
+                     #------------------------------------------------------------
+                     # Add the tweet to the thread pool to be raised as an event
+                     #------------------------------------------------------------
                      self.pool.add_task(self.raiseEvent,text,user,self.cobj.pulseUserPwd,topic)
 
              # release the lock here
 
     def on_error(self, status_code):
-        print >> sys.stderr, 'Encountered error with status code:', status_code
+        self.mlog.warning("on_error() encountered error with status code: " + str(status_code)
         return True # Don't kill the stream
 
     def on_timeout(self):
-        print >> sys.stderr, 'Timeout...'
+        self.mlog.info("on_timeout() timeout triggered.  Not killing stream.")
         return True # Don't kill the stream
 
     def __del__(self):
         self.continueThread = 0
         time.sleep(4)
-        print "killing thread"
+        self.mlog.info("killing thread")
         self.pool.wait_completion()
 
 class BmcTwitterAdapter():
@@ -271,7 +312,7 @@ class BmcTwitterAdapter():
         self.sapi.filter(track=filterArray)
 
     def handle_exit(self, signum, frame):
-        print "exiting..."
+        print "Exiting" 
 
     def manual_run(self):
         auth = tweepy.OAuthHandler(self.cobj.consumer_key, self.cobj.consumer_secret)
