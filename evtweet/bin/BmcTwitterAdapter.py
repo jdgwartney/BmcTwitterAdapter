@@ -87,6 +87,7 @@ class CustomStreamListener(tweepy.StreamListener):
         c.setopt(pycurl.HTTPHEADER,headers )
         c.setopt(pycurl.CUSTOMREQUEST, "POST")
         c.setopt(pycurl.USERPWD, userPwd)
+        c.setopt(pycurl.WRITEFUNCTION, lambda x: None)
         data = json.dumps(newEvent)
         c.setopt(pycurl.POSTFIELDS,data)
         c.perform()
@@ -157,6 +158,7 @@ class CustomStreamListener(tweepy.StreamListener):
             c.setopt(pycurl.HTTPHEADER,headers )
             c.setopt(pycurl.CUSTOMREQUEST, "POST")
             c.setopt(pycurl.USERPWD, self.cobj.pulseUserPwd)
+            c.setopt(pycurl.WRITEFUNCTION, lambda x: None)
             data = json.dumps(newMeasure)
             c.setopt(pycurl.POSTFIELDS,data)
             c.perform()
@@ -202,6 +204,7 @@ class CustomStreamListener(tweepy.StreamListener):
         c.setopt(pycurl.HTTPHEADER,headers )
         c.setopt(pycurl.CUSTOMREQUEST, "POST")
         c.setopt(pycurl.USERPWD, self.cobj.pulseUserPwd)
+        c.setopt(pycurl.WRITEFUNCTION, lambda x: None)
         data = json.dumps(newMetric)
         c.setopt(pycurl.POSTFIELDS,data)
         c.perform()
@@ -212,19 +215,9 @@ class CustomStreamListener(tweepy.StreamListener):
     #---------------------------------------------------
 
     def __init__(self):
-        LOG_FILENAME = self.cobj.logdir + "/BmcTwitterAdapter.log"
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-        self.mlog = logging.getLogger('MyLogger')
-        self.mlog.setLevel(logging.DEBUG)
-        self.handler = logging.handlers.RotatingFileHandler(
-              LOG_FILENAME, maxBytes=100000, backupCount=5)
-        self.handler.setFormatter(formatter)
-        self.mlog.addHandler(self.handler)
-        self.mlog.info("BMC Twitter Adapter starting up")
-        self.cobj.printConfig(self.mlog)
 
         self.pool = ThreadPool(20)
+        self.mlog = logging.getLogger("MyLogger")
         
         #-------------------------------------------------------------------
         # Make a call to Pulse to ensure the metric definition is in place.
@@ -281,7 +274,7 @@ class CustomStreamListener(tweepy.StreamListener):
              # release the lock here
 
     def on_error(self, status_code):
-        self.mlog.warning("on_error() encountered error with status code: " + str(status_code)
+        self.mlog.warning("on_error() encountered error with status code: " + str(status_code))
         return True # Don't kill the stream
 
     def on_timeout(self):
@@ -304,6 +297,17 @@ class BmcTwitterAdapter():
         self.pidfile_path =  '/home/pbeavers/foo.pid'
         self.pidfile_timeout = 5
 
+        LOG_FILENAME = self.cobj.logdir + "/BmcTwitterAdapter.log"
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+        self.mlog = logging.getLogger('MyLogger')
+        self.mlog.setLevel(logging.DEBUG)
+        self.handler = logging.handlers.RotatingFileHandler(
+              LOG_FILENAME, maxBytes=100000000, backupCount=5)
+        self.handler.setFormatter(formatter)
+        self.mlog.addHandler(self.handler)
+
+
     def run(self):
         auth = tweepy.OAuthHandler(self.cobj.consumer_key, self.cobj.consumer_secret)
         auth.set_access_token(self.cobj.access_token_key, self.cobj.access_token_secret)
@@ -318,6 +322,7 @@ class BmcTwitterAdapter():
         auth = tweepy.OAuthHandler(self.cobj.consumer_key, self.cobj.consumer_secret)
         auth.set_access_token(self.cobj.access_token_key, self.cobj.access_token_secret)
         self.sapi = tweepy.streaming.Stream(auth, CustomStreamListener())
+        self.sapi.mlog = self.mlog
         filterArray = self.cobj.filterString.split(",")
         self.sapi.filter(track=filterArray)
 
