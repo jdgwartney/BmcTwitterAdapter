@@ -23,7 +23,7 @@ class ConfigObject:
 
    def __init__(self):
       Config = ConfigParser.ConfigParser()
-      Config.read("../conf/evtweet.conf")
+      Config.read("../conf/BmcTwitterAdapter.conf")
       self.confdir = Config.get("Directories", "ConfDirectory" )
       self.datadir = Config.get("Directories", "DataDirectory" )
       self.logdir = Config.get("Directories", "LogDirectory" )
