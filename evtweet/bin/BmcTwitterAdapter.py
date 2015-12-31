@@ -130,7 +130,7 @@ class CustomStreamListener(tweepy.StreamListener):
        if foundTopic == True and foundKeywords == True:
            self.tweetCounterArray[returnString] = self.tweetCounterArray[returnString] + 1
        else:
-           returnString = "Not"
+           returnString = "NOT"
        
        return returnString 
 
