@@ -136,7 +136,62 @@ class CustomStreamListener(tweepy.StreamListener):
 
 
     #---------------------------------------------------
-    #
+    #  Post metrics to TrueSight Intelligence 
+    #---------------------------------------------------
+    def PostMetricsTsi(self, timestamp, newTweetCounterArray):
+  
+        #-------------------------------------------------------
+        # Specify the header 
+        #-------------------------------------------------------
+
+        apiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJBcGlLZXkuVElNRVNUQU1QIjoxNDQ1MzA4MDQ0ODI5LCJBcGlLZXkuQUNDT1VOVF9JRCI6IjU4ZTlhMjU4LWE1MTctNGQxOC1iYTgzLWQ4YmEzYWU4OTdjOCIsIkFwaUtleS5URU5BTlRfSUQiOiJlZDJmZGE5NC03NDZiLTQ4ZmMtYTUzNC03MDQzYTQ0YzhkMTgiLCJBcGlLZXkuVEVOQU5UX0NSRUFURURfVElNRSI6MTQ0NTMwODA0Mzc4MH0=.Gw0KG68a5FZzs4uxjxeMfIK98G2rYtoEAaxDnYq5aGU="
+
+
+        print "Api Key=" + self.cobj.tsiApiKey
+        headers = ['Expect:', 'Content-Type: application/json' ,  'X-API-KEY: ' + apiKey]
+        url = "https://truesight.bmc.com/api/v1/metrics?async=false"
+
+        topicArray =  self.cobj.filterString.split(",")
+        for topic in topicArray:
+            tweetCount = newTweetCounterArray[topic]
+
+            #--------------------------------------------------
+            #  Create data structure for metrics posting
+            #--------------------------------------------------
+            myMetrics = [
+            {
+                "entity_type_id": "TWEET_TOPIC",
+                "entity_id": "tweet_server." + topic,
+                "time_series": [
+                {
+                    "metric_id": "number_of_tweets",
+                    "values": [
+                    { "v": tweetCount, "t": timestamp }
+                    ]
+                }
+                ]
+            }
+            ]
+
+            #-------------------------------------------------------
+            # Issue the request
+            #-------------------------------------------------------
+
+            c= pycurl.Curl()
+            c.setopt(pycurl.URL, url)
+            c.setopt(pycurl.HTTPHEADER,headers )
+            c.setopt(pycurl.CUSTOMREQUEST, "POST")
+            data = json.dumps(myMetrics)
+            c.setopt(pycurl.POSTFIELDS,data)
+            c.perform()
+            print ("status code:=" +  str(c.getinfo(pycurl.HTTP_CODE)))
+            c.close()
+
+
+
+
+    #---------------------------------------------------
+    #  Post metrics to TrueSight Pulse
     #---------------------------------------------------
     def PostMetrics(self, timestamp, newTweetCounterArray):
         headers = ['Expect:', 'Content-Type: application/json']
@@ -181,6 +236,7 @@ class CustomStreamListener(tweepy.StreamListener):
                 self.tweetCounterArray[topic] = 0   # potential thread safety issue
                
             self.pool.add_task(self.PostMetrics,timestamp, newTweetCounterArray)
+            self.pool.add_task(self.PostMetricsTsi,timestamp, newTweetCounterArray)
             # Release the lock here
 
     #------------------------------------------------------

@@ -54,6 +54,11 @@ class ConfigObject:
 
       self.pulseUserPwd = Config.get("PulseConfig", "UserPwd" )
 
+      try:
+          self.tsiApiKey = Config.get("PulseConfig", "tsiApiKey" )
+      except:
+          self.tsiApiKey = "NOT"
+
    def printConfig(self,mlog):
       mlog.info("datadir=" + self.datadir)
       mlog.info("configdir=" + self.confdir)
