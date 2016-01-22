@@ -121,12 +121,6 @@ class CustomStreamListener(tweepy.StreamListener):
            else:
                foundKeywords = True         
 
-       self.mlog.debug("Received new tweet")
-       self.mlog.debug("topic = " + topic)
-       self.mlog.debug("foundTopic = " + str(foundTopic))
-       self.mlog.debug("foundKeywords = " + str(foundKeywords))
-       self.mlog.debug("tweetText = " + tweetText)
-
        if foundTopic == True and foundKeywords == True:
            self.tweetCounterArray[returnString] = self.tweetCounterArray[returnString] + 1
        else:
@@ -139,7 +133,7 @@ class CustomStreamListener(tweepy.StreamListener):
     #  Post metrics to TrueSight Intelligence 
     #---------------------------------------------------
     def PostMetricsTsi(self, timestamp, newTweetCounterArray):
-  
+        self.mlog.debug("Calling PostMetricsTsi")  
         #-------------------------------------------------------
         # Specify the header 
         #-------------------------------------------------------
@@ -147,7 +141,7 @@ class CustomStreamListener(tweepy.StreamListener):
         apiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJBcGlLZXkuVElNRVNUQU1QIjoxNDQ1MzA4MDQ0ODI5LCJBcGlLZXkuQUNDT1VOVF9JRCI6IjU4ZTlhMjU4LWE1MTctNGQxOC1iYTgzLWQ4YmEzYWU4OTdjOCIsIkFwaUtleS5URU5BTlRfSUQiOiJlZDJmZGE5NC03NDZiLTQ4ZmMtYTUzNC03MDQzYTQ0YzhkMTgiLCJBcGlLZXkuVEVOQU5UX0NSRUFURURfVElNRSI6MTQ0NTMwODA0Mzc4MH0=.Gw0KG68a5FZzs4uxjxeMfIK98G2rYtoEAaxDnYq5aGU="
 
 
-        print "Api Key=" + self.cobj.tsiApiKey
+        # print "Api Key=" + self.cobj.tsiApiKey
         headers = ['Expect:', 'Content-Type: application/json' ,  'X-API-KEY: ' + apiKey]
         url = "https://truesight.bmc.com/api/v1/metrics?async=false"
 
@@ -184,8 +178,10 @@ class CustomStreamListener(tweepy.StreamListener):
             data = json.dumps(myMetrics)
             c.setopt(pycurl.POSTFIELDS,data)
             c.perform()
-            print ("status code:=" +  str(c.getinfo(pycurl.HTTP_CODE)))
+            # print ("status code:=" +  str(c.getinfo(pycurl.HTTP_CODE)))
             c.close()
+
+        self.mlog.debug("PostMetricsTsi complete")  
 
 
 
@@ -194,6 +190,7 @@ class CustomStreamListener(tweepy.StreamListener):
     #  Post metrics to TrueSight Pulse
     #---------------------------------------------------
     def PostMetrics(self, timestamp, newTweetCounterArray):
+        self.mlog.debug("Calling PostMetrics")  
         headers = ['Expect:', 'Content-Type: application/json']
         url =  "https://premium-api.boundary.com/v1/measurements"
 
@@ -218,6 +215,8 @@ class CustomStreamListener(tweepy.StreamListener):
             c.setopt(pycurl.POSTFIELDS,data)
             c.perform()
             c.close()
+
+        self.mlog.debug("PostMetrics complete")  
 
     #---------------------------------------------------
     # Aggregate and send total
@@ -274,6 +273,16 @@ class CustomStreamListener(tweepy.StreamListener):
 
         self.pool = ThreadPool(20)
         self.mlog = logging.getLogger("MyLogger")
+
+        LOG_FILENAME = self.cobj.logdir + "/BmcTwitterAdapter.log"
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+        self.mlog = logging.getLogger('MyLogger')
+        self.mlog.setLevel(logging.DEBUG)
+        self.handler = logging.handlers.RotatingFileHandler(
+              LOG_FILENAME, maxBytes=100000000, backupCount=5)
+        self.handler.setFormatter(formatter)
+        self.mlog.debug("__init__() for CustomStreamListener.")
         
         #-------------------------------------------------------------------
         # Make a call to Pulse to ensure the metric definition is in place.
@@ -295,7 +304,8 @@ class CustomStreamListener(tweepy.StreamListener):
     # we do not have a need for the on_status method so it is commented out
     #--------------------------------------------------------------------------
 
-    #def on_status(self, status):
+    def on_status(self, status):
+        self.mlog.debug("Received on_status callback")
 
     #--------------------------------------------------------------------------
     # Our main processing object is a sublass of Tweepy's stream listener
@@ -303,6 +313,7 @@ class CustomStreamListener(tweepy.StreamListener):
     # is received.
     #--------------------------------------------------------------------------
     def on_data(self, data):
+        self.mlog.debug("Received on_data callback")
         tweet = json.loads(data)
         if tweet.has_key('user'):
              user = tweet['user']['name']
@@ -330,10 +341,12 @@ class CustomStreamListener(tweepy.StreamListener):
              # release the lock here
 
     def on_error(self, status_code):
+        self.mlog.debug("Received on_error call back")
         self.mlog.warning("on_error() encountered error with status code: " + str(status_code))
         return True # Don't kill the stream
 
     def on_timeout(self):
+        self.mlog.debug("Receidved on_timeout callback")
         self.mlog.info("on_timeout() timeout triggered.  Not killing stream.")
         return True # Don't kill the stream
 

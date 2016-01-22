@@ -1,5 +1,4 @@
 import time
-
 from daemon import runner
 
 import BmcTwitterAdapter
