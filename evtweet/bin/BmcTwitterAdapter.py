@@ -181,7 +181,7 @@ class CustomStreamListener(tweepy.StreamListener):
             try:
                c.perform()
             except Exception, e:
-               self.mlog.debug(e)
+               self.mlog.warning(e)
             
             c.close()
 
@@ -217,7 +217,10 @@ class CustomStreamListener(tweepy.StreamListener):
             c.setopt(pycurl.WRITEFUNCTION, lambda x: None)
             data = json.dumps(newMeasure)
             c.setopt(pycurl.POSTFIELDS,data)
-            c.perform()
+            try:
+               c.perform()
+            except Exception, e:
+               self.mlog.warning(e)
             c.close()
 
         self.mlog.debug("PostMetrics complete")  
@@ -282,7 +285,7 @@ class CustomStreamListener(tweepy.StreamListener):
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
         self.mlog = logging.getLogger('MyLogger')
-        self.mlog.setLevel(logging.DEBUG)
+        self.mlog.setLevel(logging.WARNING)
         self.handler = logging.handlers.RotatingFileHandler(
               LOG_FILENAME, maxBytes=100000000, backupCount=5)
         self.handler.setFormatter(formatter)
@@ -345,13 +348,13 @@ class CustomStreamListener(tweepy.StreamListener):
              # release the lock here
 
     def on_error(self, status_code):
-        self.mlog.debug("Received on_error call back")
+        self.mlog.warning("Received on_error call back")
         self.mlog.warning("on_error() encountered error with status code: " + str(status_code))
         return True # Don't kill the stream
 
     def on_timeout(self):
-        self.mlog.debug("Receidved on_timeout callback")
-        self.mlog.info("on_timeout() timeout triggered.  Not killing stream.")
+        self.mlog.warning("Receidved on_timeout callback")
+        self.mlog.warning("on_timeout() timeout triggered.  Not killing stream.")
         return True # Don't kill the stream
 
     def __del__(self):
