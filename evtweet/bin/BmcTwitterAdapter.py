@@ -177,8 +177,12 @@ class CustomStreamListener(tweepy.StreamListener):
             c.setopt(pycurl.CUSTOMREQUEST, "POST")
             data = json.dumps(myMetrics)
             c.setopt(pycurl.POSTFIELDS,data)
-            c.perform()
-            # print ("status code:=" +  str(c.getinfo(pycurl.HTTP_CODE)))
+
+            try:
+               c.perform()
+            except Exception, e:
+               self.mlog.debug(e)
+            
             c.close()
 
         self.mlog.debug("PostMetricsTsi complete")  
