@@ -1,3 +1,6 @@
+#!/usr/bin/python
+
+
 import time
 import ConfigObject
 import sys
@@ -363,50 +366,17 @@ class CustomStreamListener(tweepy.StreamListener):
         self.mlog.info("killing thread")
         self.pool.wait_completion()
 
-class BmcTwitterAdapter():
-    cobj = ConfigObject.ConfigObject()
 
-    def __init__(self):
-        self.stdin_path = '/dev/null'
-        self.stdout_path = '/dev/tty'
-        self.stderr_path = '/dev/tty'
-        self.pidfile_path =  '/home/pbeavers/foo.pid'
-        self.pidfile_timeout = 5
+#------------------------------------------------------------------------
+# Main
+#-----------------------------------------------------------------------
 
-        LOG_FILENAME = self.cobj.logdir + "/BmcTwitterAdapter.log"
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+cobj = ConfigObject.ConfigObject()
+auth = tweepy.OAuthHandler(cobj.consumer_key, cobj.consumer_secret)
+auth.set_access_token(cobj.access_token_key, cobj.access_token_secret)
+sapi = tweepy.streaming.Stream(auth, CustomStreamListener())
 
-        self.mlog = logging.getLogger('MyLogger')
-        self.mlog.setLevel(logging.DEBUG)
-        self.handler = logging.handlers.RotatingFileHandler(
-              LOG_FILENAME, maxBytes=100000000, backupCount=5)
-        self.handler.setFormatter(formatter)
-        self.mlog.addHandler(self.handler)
-
-
-    def run(self):
-        auth = tweepy.OAuthHandler(self.cobj.consumer_key, self.cobj.consumer_secret)
-        auth.set_access_token(self.cobj.access_token_key, self.cobj.access_token_secret)
-        self.sapi = tweepy.streaming.Stream(auth, CustomStreamListener())
-        filterArray = self.cobj.filterString.split(",")
-        self.sapi.filter(track=filterArray)
-
-    def handle_exit(self, signum, frame):
-        print "Exiting" 
-
-    def manual_run(self):
-        auth = tweepy.OAuthHandler(self.cobj.consumer_key, self.cobj.consumer_secret)
-        auth.set_access_token(self.cobj.access_token_key, self.cobj.access_token_secret)
-        self.sapi = tweepy.streaming.Stream(auth, CustomStreamListener())
-        self.sapi.mlog = self.mlog
-        filterArray = self.cobj.filterString.split(",")
-        self.sapi.filter(track=filterArray)
-
-    def __del__(self):
-        print "deleting BmcTwitterAdapter"
-
-
-
-
+filterArray = cobj.filterString.split(",")
+sapi.filter(track=filterArray)
 
 
